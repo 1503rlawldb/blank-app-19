@@ -147,11 +147,11 @@ if st.button("🔍 조회 및 지도 표시"):
                 st.info(f"💬 제출 의견: {user_idea}")
             
             # -----------------------
-            # 지도 시각화 (세계 지도 + 바다 온도 상승 표시 + 위치 화살표)
+            # 지도 시각화
             # -----------------------
             st.subheader("🗺️ 세계 지도 시각화 (바다 온도 상승 색상, 2025 기준)")
             
-            # 교육용 임의 데이터 생성 (바다 온도 변화 근사)
+            # 교육용 임의 데이터 (바다 온도 변화 근사)
             lats = np.linspace(-90,90,36)
             lons = np.linspace(-180,180,72)
             temp_data = []
@@ -167,10 +167,35 @@ if st.button("🔍 조회 및 지도 표시"):
                 data=temp_df,
                 get_position='[lon, lat]',
                 get_weight="temp",
-                radiusPixels=20,
+                radiusPixels=25,
                 intensity=1,
                 threshold=0.01,
             )
             
-            # 위치 화살표 Layer
-            icon
+            # 위치 표시 화살표
+            icon_df = pd.DataFrame([{
+                "lat": lat,
+                "lon": lon,
+                "icon_data": "marker"
+            }])
+            icon_layer = pdk.Layer(
+                type="IconLayer",
+                data=icon_df,
+                get_icon="icon_data",
+                get_size=4,
+                size_scale=15,
+                get_position='[lon, lat]',
+                pickable=True
+            )
+            
+            view = pdk.ViewState(latitude=lat, longitude=lon, zoom=2)
+            deck = pdk.Deck(
+                layers=[heat_layer, icon_layer],
+                initial_view_state=view,
+                map_style="mapbox://styles/mapbox/light-v9"
+            )
+            st.pydeck_chart(deck)
+            
+            # -----------------------
+            # 출처
+            #
