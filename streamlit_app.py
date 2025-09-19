@@ -1,107 +1,78 @@
 import streamlit as st
 import pandas as pd
+import matplotlib.pyplot as plt
 import numpy as np
-import pydeck as pdk
-import requests
-from io import StringIO
 
-# --- 페이지 기본 설정 ---
-st.set_page_config(
-    page_title="물러서는 땅, 다가오는 바다",
-    page_icon="🌊",
-    layout="wide"
-)
-
-# --- 지도 표시 함수 ---
-def plot_map(lat, lon, elev_m, sea_rise_m, zoom=8, title=""):
-    # 현재 해수면과 비교
-    inundated = elev_m <= sea_rise_m
-
-    # 지도 시뮬레이션용 데이터프레임
-    df_location = pd.DataFrame([{
-        "lat": lat,
-        "lon": lon,
-        "elev_m": elev_m,
-        "inundated": inundated,
-        "color": [220, 20, 60, 120] if inundated else [0, 114, 178, 80]  # 빨강/파랑 투명도
-    }])
-
-    # 뷰 세팅
-    view_state = pdk.ViewState(
-        latitude=lat,
-        longitude=lon,
-        zoom=zoom,
-        bearing=0,
-        pitch=45
-    )
-
-    # ScatterplotLayer 삭제 -> 동그라미 제거
-    # PolygonLayer나 ColumnLayer를 써야 더 현실적인 침수범위 표현 가능
-    layer = pdk.Layer(
-        "ColumnLayer",
-        data=df_location,
-        get_position='[lon, lat]',
-        get_elevation='elev_m',
-        elevation_scale=500,
-        radius=20000,
-        get_fill_color='color',
-        pickable=True,
-        extruded=True
-    )
-
-    r = pdk.Deck(
-        layers=[layer],
-        initial_view_state=view_state,
-        tooltip={"html": f"<b>{title}</b><br/>해발: {elev_m}m<br/>침수 위험: {inundated}"}
-    )
-    return r
-
-
-# --- 검색 기능 ---
-LOCATIONS = {
-    "투발루": {"lat": -8.5240, "lon": 179.1942, "elev_m": 1.5, "zoom": 11},
-    "인천": {"lat": 37.4563, "lon": 126.7052, "elev_m": 3.5, "zoom": 10},
-    "부산": {"lat": 35.1796, "lon": 129.0756, "elev_m": 2.8, "zoom": 10},
-    "암스테르담": {"lat": 52.3702, "lon": 4.8952, "elev_m": -2.0, "zoom": 10}
+# --------------------------
+# 국가별 피해 사례 및 대처 방안 데이터
+# --------------------------
+country_info = {
+    "투발루": {
+        "피해": "평균 해발 2~3m로 해수면 상승에 가장 취약. 농경지와 식수원 침수, 환경 난민 발생.",
+        "대처": "국제 사회에 이민 요청, 기후변화 협약에서 생존권 보장을 요구."
+    },
+    "방글라데시": {
+        "피해": "매년 우기마다 농경지가 침수되어 수백만 명의 주민 생계 위협.",
+        "대처": "홍수 방지 제방 건설, 기후 난민 이주 정책 논의."
+    },
+    "몰디브": {
+        "피해": "일부 섬이 바닷물에 잠겨 거주 불가능 지역 증가.",
+        "대처": "관광 수익으로 해안 방어 시설 건설, 산호초 복원 프로젝트."
+    },
+    "네덜란드": {
+        "피해": "저지대 국가 특성상 해수면 상승에 직접적인 위협.",
+        "대처": "세계 최고 수준의 방조제와 수문 시스템 운영."
+    },
+    "미국 마이애미": {
+        "피해": "‘Sunny Day Flooding’ 현상으로 도로가 주기적으로 침수.",
+        "대처": "해안 방어벽 설치, 빗물 배수 시스템 강화."
+    },
+    "인도네시아 자카르타": {
+        "피해": "해수면 상승과 지반 침하로 도심 침수 심각. 수도 이전 논의.",
+        "대처": "수도 이전(누산타라 건설), 대규모 해안 방조제 건설."
+    }
 }
 
-st.title("🌊 해수면 상승 지도 시뮬레이션")
+# --------------------------
+# Streamlit UI
+# --------------------------
+st.title("🌊 해수면 상승 피해 국가 검색 대시보드")
 
-search_term = st.text_input("도시 이름을 입력하세요 (예: 투발루, 인천, 부산, 암스테르담)", "")
-if search_term.strip() and search_term in LOCATIONS:
-    location_data = LOCATIONS[search_term]
+# 검색창
+country = st.text_input("국가명을 입력하세요 (예: 투발루, 방글라데시, 몰디브, 네덜란드, 미국 마이애미, 인도네시아 자카르타)")
 
-    st.subheader(f"'{search_term}' 지역 시뮬레이션")
-    sea_rise_m = st.slider("가상 해수면 상승 높이 (m)", 0.0, 5.0, 1.0, step=0.1)
-
-    # 2025년 현재 지도
-    st.markdown("#### 2025년 해수면 시뮬레이션")
-    r_current = plot_map(
-        location_data["lat"], location_data["lon"], location_data["elev_m"],
-        sea_rise_m, location_data["zoom"], title=f"{search_term} (2025)"
-    )
-    st.pydeck_chart(r_current)
-
-    # 과거 지도 (예시: 1900년)
-    st.markdown("#### 과거와 비교 (1900년)")
-    r_past = plot_map(
-        location_data["lat"], location_data["lon"], location_data["elev_m"],
-        0.0, location_data["zoom"], title=f"{search_term} (1900)"
-    )
-    st.pydeck_chart(r_past)
-
-    st.caption(f"빨간색 = 침수 위험 지역 / 파란색 = 안전 지역")
-
+if country in country_info:
+    st.subheader(f"📍 {country}의 해수면 상승 피해 사례와 대처 방안")
+    st.markdown(f"**피해 사례:** {country_info[country]['피해']}")
+    st.markdown(f"**대처 방안:** {country_info[country]['대처']}")
 else:
-    st.info("검색 가능한 도시를 입력하세요. (예: 투발루, 인천, 부산, 암스테르담)")
+    if country:
+        st.warning("❌ 해당 국가 데이터가 없습니다. 다른 국가를 입력해 보세요.")
 
+# --------------------------
+# 지도 시뮬레이션 (색상 레이어)
+# --------------------------
+st.subheader("🌍 해수면 상승 위험도 지도 (시뮬레이션)")
 
-# --- 출처 ---
-st.divider()
+# 샘플 지도 생성
+width, height = 800, 400
+overlay = np.zeros((height, width, 4))
+overlay[:height//3, :, :] = [1, 0, 0, 0.4]      # 위험 (빨강)
+overlay[height//3:2*height//3, :, :] = [1, 0.5, 0, 0.3] # 조심 (주황)
+overlay[2*height//3:, :, :] = [0, 1, 0, 0.2]    # 안정 (초록)
+
+fig, ax = plt.subplots(figsize=(10,5))
+ax.imshow(overlay, extent=[0, width, height, 0])
+ax.axis("off")
+st.pyplot(fig)
+
+# --------------------------
+# 데이터 출처
+# --------------------------
 st.markdown("""
-**데이터 출처**
-- [NASA Climate Change Data](https://climate.nasa.gov/)
-- [NOAA Sea Level Rise Data](https://www.climate.gov/)
-- [IPCC 6차 보고서](https://www.ipcc.ch/ar6/)
-- [Our World in Data](https://ourworldindata.org/co2-and-greenhouse-gas-emissions)
+---
+📌 **데이터 출처**  
+- IPCC (2021) "Sixth Assessment Report"  
+- NASA Sea Level Change Team  
+- NOAA (National Oceanic and Atmospheric Administration)  
 """)
